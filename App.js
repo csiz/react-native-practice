@@ -43,6 +43,7 @@ class MapScreen extends Component<Props> {
 
     this.state = {
       pothole: null,
+      pothole_index: null,
       region: {...default_region},
     };
   }
@@ -110,23 +111,23 @@ class MapScreen extends Component<Props> {
         showsMyLocationButton={true}
         onMapReady={() => {this.move_to_location();}}
         onPress={() => {
-          this.setState({pothole: null});
+          this.setState({pothole: null, pothole_index: null});
         }}
       >
-      {potholes.map(pothole => (
+      {potholes.map((pothole, i) => (
         <Marker
           key={pothole.id}
           coordinate={pothole.position}
           pinColor={state_colors[pothole.state]}
           title={`Pothole: ${fprice(pothole.contributions)}/${fprice(pothole.expected_cost)}`}
           description={pothole.description}
-          onPress={(state) => this.setState({...state, pothole: pothole})}
+          onPress={(state) => this.setState({...state, pothole: pothole, pothole_index: i})}
         />
       ))}
       </MapView>
     );
 
-    let {pothole} = this.state;
+    let {pothole, pothole_index} = this.state;
 
     const footer = (pothole === null) ? (
       <Text style={{
@@ -160,7 +161,12 @@ class MapScreen extends Component<Props> {
           <View style={{flex: 2}}>
             <Button
               title='Contribute'
-              onPress={() => {}}
+              onPress={() => {
+                this.props.navigation.navigate('Contribute', {
+                  pothole_index,
+                  update_prev: () => {this.forceUpdate();},
+                });
+              }}
               color={state_colors.funding}
             />
           </View>
@@ -174,7 +180,12 @@ class MapScreen extends Component<Props> {
           <View style={{flex: 1}}>
             <Button
               title='...'
-              onPress={() => {}}
+              onPress={() => {
+                if (pothole_index === null) {
+                  return console.warning('More info button shows, but no pothole index!');
+                }
+                this.props.navigation.navigate('Pothole', {pothole_index});
+              }}
             />
           </View>
         </View>
@@ -332,7 +343,6 @@ class NewPotholeScreen extends Component<Props> {
           />
           <TextInput
             placeholder="What's the problem?"
-            onChangeText={(text) => {}}
             multiline={true}
             numberOfLines={5}
             maxLength={500}
@@ -387,7 +397,225 @@ class NewPotholeScreen extends Component<Props> {
             this.props.update_map_screen(this.state.region);
             this.props.navigation.navigate('Map');
           }}
-          style={{position: 'absolute', bottom: 0}}
+          style={{}}
+        />
+      </View>
+    );
+  }
+}
+
+
+
+@withMappedNavigationProps()
+class PotholeScreen extends Component<Props> {
+  constructor(props){
+    super(props);
+
+    const pothole = potholes[this.props.pothole_index];
+
+
+    this.state = {
+      region: {...default_region, ...pothole.position},
+      pothole,
+      pothole_index: this.props.pothole_index,
+      comment_text: '',
+    };
+  }
+
+  static navigationOptions = {
+    headerTitle: <Text style={{fontSize: 16, margin: 10}}>Pothole</Text>
+  };
+
+
+  render() {
+    const {pothole, pothole_index} = this.state;
+
+    return (
+      <View style={{
+        flex: 1,
+        justifyContent: 'center',
+        backgroundColor: '#FFF',
+      }}>
+        <MapView
+          style={{flex: 3}}
+          onRegionChangeComplete={(region) => {
+            this.setState({region});
+          }}
+          region={this.state.region}
+          showsUserLocation={true}
+          loadingEnabled={true}
+        >
+          <Marker
+            coordinate={pothole.position}
+            pinColor={state_colors[pothole.state]}
+          />
+        </MapView>
+        <View style={{flex: 5, margin: 10, overflow: 'hidden'}}>
+        <ScrollView>
+          <View style={styles.thumbnails_container}>
+            <ScrollView horizontal={true}>
+              {pothole.pictures.map(pic => (
+                <Image
+                  source={{uri: pic.uri}}
+                  style={styles.thumbnails}
+                  key={pic.index}
+                />
+              ))}
+            </ScrollView>
+          </View>
+          <Text
+            style={{textAlign: 'justify', marginLeft: 5}}
+            numberOfLines={5}
+          >
+            {pothole.description}
+          </Text>
+          <View style={{marginLeft: 5}}>
+            <Text>Comments:</Text>
+          {pothole.comments.map((comment, i) => (
+            <View key={`comment ${i}`}>
+              <Text style={{fontSize: 12, fontWeight: 'bold'}}>{`${comment.user}:`}</Text>
+              <Text style={{fontSize: 10}}>{comment.text}</Text>
+            </View>
+          ))}
+          </View>
+          <Button title='Leave comment' onPress={() => {
+            pothole.comments.push({
+              user: 'Mr Chatty', // TODO: login for comments too
+              text: this.state.comment_text,
+              time: new Date(),
+              role: 'passerby', // TODO: probably want to update role dynamically
+            });
+            this.setState({pothole, comment_text: ''});
+          }}/>
+          <TextInput
+            placeholder='Comment...'
+            multiline={true}
+            numberOfLines={5}
+            maxLength={500}
+            onChangeText={(text) => {
+              this.setState({comment_text: text});
+            }}
+            value={this.state.comment_text}
+          />
+        </ScrollView>
+        </View>
+        <View style={{width: '100%'}}>
+          <Text fontSize={14}>
+            {`Funded ${fprice(pothole.contributions)} / ${fprice(pothole.expected_cost)} expected to fix`}
+          </Text>
+          <View style={{flexDirection: 'row', margin: 2}}>
+            <View style={{flex: 2}}>
+              <Button
+                title='Contribute'
+                onPress={() => {
+                  this.props.navigation.navigate('Contribute', {
+                    pothole_index,
+                    update_prev: () => {this.forceUpdate();},
+                  });
+                }}
+                color={state_colors.funding}
+              />
+            </View>
+            <View style={{flex: 2}}>
+              <Button
+                title='Fix'
+                onPress={() => {}}
+                color={state_colors.fixing}
+              />
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  }
+}
+
+@withMappedNavigationProps()
+class ContributeScreen extends Component<Props> {
+  constructor(props){
+    super(props);
+
+    const pothole = potholes[this.props.pothole_index];
+
+    this.state = {
+      pothole,
+      pothole_index: this.props.pothole_index,
+      contribution_amount: {value: 0, unit: pothole.expected_cost.unit},
+    };
+  }
+
+  static navigationOptions = {
+    headerTitle: <Text style={{fontSize: 16, margin: 10}}>Contribute</Text>
+  };
+
+
+  render() {
+    const {pothole, pothole_index, contribution_amount} = this.state;
+
+    const remaining = pothole.expected_cost.value - pothole.contributions.value;
+
+    return (
+      <View style={{
+        flex: 1,
+        justifyContent: 'center',
+        backgroundColor: '#FFF',
+      }}>
+        <Text fontSize={14}>
+          {`Funded ${fprice(pothole.contributions)} / ${fprice(pothole.expected_cost)} expected to fix`}
+        </Text>
+
+        <View style={{flexDirection: 'row'}}>
+          <Text>Pick contribution: </Text>
+          <Text>{`${fprice({value: 1, unit: contribution_amount.unit})}`}</Text>
+          <Slider
+            minimumValue={1}
+            maximumValue={remaining}
+            step={1}
+            value={10}
+            style={{flex: 1}}
+            onValueChange={(value) => {
+              this.setState({contribution_amount: {value: parseFloat(value), unit: contribution_amount.unit}});
+            }}
+            value={contribution_amount.value}
+          />
+          <Text>{`${fprice({value: remaining, unit: contribution_amount.unit})}`}</Text>
+        </View>
+        <View
+          style={{flexDirection: 'row', alignItems: 'center'}}
+        >
+          <Text>Or enter amount:</Text>
+          <TextInput
+            placeholder='$'
+            keyboardType='numeric'
+            multiline={false}
+            onChangeText={(value) => {
+              const fvalue = parseFloat(value);
+              console.log(fvalue);
+              if (!isNaN(fvalue)) {
+                this.setState({contribution_amount: {value: fvalue, unit: contribution_amount.unit}});
+              }
+            }}
+          />
+        </View>
+
+        <Button
+          title={`Pay ${fprice(contribution_amount)}`}
+          onPress={() => {
+            pothole.payments.push({
+              user: 'Mr Moneybags', // TODO: really need that login page
+              value: contribution_amount.value,
+              unit: contribution_amount.unit,
+              reference: 'Insert payment reference here',
+            });
+
+            if (contribution_amount.unit !== 'USD') throw `Not supporting ${contribution_amount.unit} yet.`;
+
+            pothole.contributions.value += contribution_amount.value;
+
+            this.props.update_prev();
+
+            this.props.navigation.goBack();
+          }}
         />
       </View>
     );
@@ -397,8 +625,8 @@ class NewPotholeScreen extends Component<Props> {
 // Screens:
 // 1. [v] map and quick view
 // 2. [v] new pothole (location, upload pics, write description, estimate cost)
-// 3. [ ] existing pothole (location, pics, description, comments, post comment, contribute, fix)
-// 4. [ ] contribute page (mock with just a number to type in)
+// 3. [v] existing pothole (location, pics, description, comments, post comment, contribute, fix)
+// 4. [v] contribute page (mock with just a number to type in)
 // 5. [ ] login page (mock accepting any user with any password)
 // 6. [ ] fix page (mock with a date of expected to fix, or picture of it fixed)
 
@@ -407,6 +635,8 @@ const App = createStackNavigator(
   {
     Map: MapScreen,
     NewPothole: NewPotholeScreen,
+    Pothole: PotholeScreen,
+    Contribute: ContributeScreen,
   },
   {
     initialRouteName: 'Map',
