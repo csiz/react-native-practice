@@ -1,7 +1,8 @@
 # Project passwords
 secrets.txt
-android/app/src/main/AndroidManifest.xml
 
+# Defaults
+# --------
 
 # OSX
 #
