@@ -1,7 +1,7 @@
-PotholeCoin
-===========
+React Practice
+==============
 
-PotholeCoin is an app for crowdfunding pothole repairs.
+Practice app to use maps with react native in android.
 
 Setup
 -----
